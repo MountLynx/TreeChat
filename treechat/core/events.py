@@ -44,6 +44,8 @@ class CardCreate:
     body: str
     from_path: list[int]
     instruction: str = ""
+    created_at: str = ""
+    """事件携带时间戳：重放派生的 Card 与实时构建逐字段相等（重放同一性）。"""
 
 
 @dataclass
