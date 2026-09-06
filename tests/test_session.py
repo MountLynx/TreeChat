@@ -3,6 +3,10 @@ import asyncio
 
 import pytest
 
+from treechat.core.errors import TreeChatError
+
+import pytest
+
 from treechat.config import TreeChatConfig
 from treechat.core.events import UserMsg
 from treechat.session import TreeChatSession, list_sessions
@@ -115,3 +119,10 @@ def test_list_sessions(tmp_path, fake_chat, fake_card_client, monkeypatch):
     (config.sessions_dir() / "坏.jsonl").write_text("not json", encoding="utf-8")
     listed = list_sessions(config)
     assert [m.name for _, m in listed] == ["甲"]
+
+
+def test_make_card_rejects_unknown_seqs(tmp_path, fake_chat, fake_card_client):
+    s = _session(tmp_path, fake_chat, fake_card_client)
+    asyncio.run(s.turn("问"))
+    with pytest.raises(TreeChatError, match="不存在的节点"):
+        asyncio.run(s.make_card("总结", from_seqs=[2, 99]))

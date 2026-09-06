@@ -95,6 +95,9 @@ class TreeChatSession:
         seqs = from_seqs if from_seqs is not None else self.branch_segment(seq)
         if not seqs:
             raise TreeChatError("提炼范围为空")
+        missing = [s for s in seqs if s not in self.conversation.nodes]
+        if missing:
+            raise TreeChatError(f"提炼范围含不存在的节点: {missing[:3]}")
         lines = []
         for s in seqs:
             n = self.conversation.nodes[s]

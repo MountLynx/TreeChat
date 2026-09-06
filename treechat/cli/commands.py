@@ -9,11 +9,11 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from llm import LLMError
 
 from .. import llm_bridge
 from ..config import TreeChatConfig
 from ..core.errors import TreeChatError
+from ..llm_bridge import LLMError
 from ..session import TreeChatSession
 
 Say = Callable[[str], None]

@@ -9,9 +9,9 @@ import argparse
 import asyncio
 from typing import Awaitable, Callable
 
-from llm import LLMError
 
 from .commands import handle_command
+from ..llm_bridge import LLMError
 from ..config import TreeChatConfig
 from ..core.errors import TreeChatError
 from ..session import TreeChatSession

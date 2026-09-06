@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from llm import LLMConfig, Message, create_llm_client
+from llm import LLMConfig, LLMError, Message, create_llm_client
 from module_harness import call_harness
 from module_harness.core.config import HarnessConfig
 from module_harness.core.outputfmt import OutputFormat
