@@ -89,3 +89,44 @@ def test_repl_help_and_unknown_command(tmp_path, fake_chat, fake_card_client):
              input_fn=_make_input(["/help", "/nope", "/quit"]), say=say)
     assert any("命令" in line for line in out)
     assert any("未知命令" in line for line in out)
+
+
+def test_repl_branch_trunk_leaf_flow(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    run_repl(
+        s, TreeChatConfig(data_dir=tmp_path),
+        input_fn=_make_input([
+            "主干一问",            # 2u 3a
+            "/branch 2",           # 指针 → #2
+            "分支一问",            # 4u 5a（此链 3 节点 > 主干 2 节点，分支即成主干）
+            "/trunk",              # 谁最长谁是主干 → 指针 #5
+            "/leaf",               # 下一条 = 叶子
+            "叶子一问",            # 6u 7a
+            "/quit",
+        ]),
+        say=say,
+    )
+    conv = s.conversation
+    assert conv.nodes[4].parent == 2          # 分支挂在 #2
+    assert conv.nodes[6].parent is None       # 叶子根
+    assert conv.pointer == 7                  # /trunk 后又轮转到叶子链末端
+    assert any("新枝" in line for line in out)
+    assert any("叶子" in line for line in out)
+
+
+def test_repl_tree_command(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input(["问一句", "/tree", "/quit"]), say=say)
+    assert any("◆" in line for line in out)
+    assert any("#" in line for line in out)
+
+
+def test_repl_branch_unknown_seq_errors(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input(["/branch 99", "/quit"]), say=say)
+    assert any("错误" in line for line in out)

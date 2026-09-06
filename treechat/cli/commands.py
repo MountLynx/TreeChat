@@ -30,8 +30,7 @@ _HELP = """\
   /help；/quit
 """
 
-_UNIMPLEMENTED = {"tree", "branch", "trunk", "leaf", "card", "cards",
-                  "pin", "unpin", "system", "model"}
+_UNIMPLEMENTED = {"card", "cards", "pin", "unpin", "system", "model"}
 
 
 async def handle_command(session: TreeChatSession, config: TreeChatConfig,
@@ -49,6 +48,28 @@ async def handle_command(session: TreeChatSession, config: TreeChatConfig,
         elif cmd == "where":
             depth = len(conv.path_to(conv.pointer)) if conv.pointer else 0
             say(f"指针: #{conv.pointer} · 路径深度 {depth} · 会话 {conv.name}")
+        elif cmd == "tree":
+            from .treeview import render_tree
+            say(render_tree(conv))
+        elif cmd == "branch":
+            if not rest:
+                say("用法: /branch <seq>")
+            else:
+                try:
+                    conv.set_pointer(int(rest))
+                except ValueError:
+                    raise TreeChatError(f"seq 必须是数字: {rest}") from None
+                say(f"指针 → #{conv.pointer}；下一条输入长新枝")
+        elif cmd == "trunk":
+            end = conv.trunk_end()
+            if end is None:
+                say("（空会话）")
+            else:
+                conv.set_pointer(end)
+                say(f"指针 → 主干末端 #{end}")
+        elif cmd == "leaf":
+            state["leaf_next"] = True
+            say("下一条输入 = 无上下文叶子提问")
         elif cmd in _UNIMPLEMENTED:
             say(f"/{cmd} 尚未实现（Task 10/11）")
         else:
