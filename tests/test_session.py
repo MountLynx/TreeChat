@@ -45,6 +45,7 @@ def test_turn_happy_path(tmp_path, fake_chat, fake_card_client):
     s = _session(tmp_path, fake_chat, fake_card_client)
     a = asyncio.run(s.turn("你好"))
     assert s.conversation.nodes[a].text == "mock reply"
+    assert s.conversation.nodes[a].model == "fake-model"
     assert s.conversation.path_to(a)[-1].role == "assistant"
 
 

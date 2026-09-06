@@ -61,7 +61,9 @@ class TreeChatSession:
                        conv.cards.pinned_cards(), strategy=self.window)
         reply, usage = await llm_bridge.chat_turn(
             self.client, ctx.system, ctx.history, ctx.current)
-        return conv.append_assistant(user_seq, reply, usage=usage)
+        cfg = getattr(self.client, "config", None)
+        model = getattr(cfg, "model", "") if cfg is not None else ""
+        return conv.append_assistant(user_seq, reply, model=model, usage=usage)
 
     async def turn(self, text: str, *, leaf: bool = False) -> int:
         """send + complete 一步走。失败时 user 节点已落盘（悬而未答），turn_retry 重试。"""

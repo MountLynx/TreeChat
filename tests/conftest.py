@@ -12,6 +12,7 @@ class FakeChatClient:
         self.reply = reply
         self.calls: list[list] = []
         self.fail = False
+        self.config = type("Config", (), {"model": "fake-model"})()
 
     async def chat(self, messages):
         self.calls.append(list(messages))
