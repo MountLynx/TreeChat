@@ -59,11 +59,12 @@ class SessionStore:
         return events
 
     def append(self, event: object) -> int:
-        """追加事件（fsync 持久化），返回分配的 seq。"""
+        """追加事件（fsync 持久化），返回分配的 seq。父目录不存在则自动创建。"""
         if not self._loaded:
             self.load()
         seq = self._last_seq + 1
         line = json.dumps(event_to_dict(seq, event), ensure_ascii=False)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
             f.flush()
