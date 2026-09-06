@@ -5,10 +5,13 @@ state（REPL 会话态，repl 层持有）：{"leaf_next": bool}；/retry 目标
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any, Callable
 
 from llm import LLMError
 
+from .. import llm_bridge
 from ..config import TreeChatConfig
 from ..core.errors import TreeChatError
 from ..session import TreeChatSession
@@ -30,7 +33,44 @@ _HELP = """\
   /help；/quit
 """
 
-_UNIMPLEMENTED = {"card", "cards", "pin", "unpin", "system", "model"}
+_RANGE_RE = re.compile(r"^(\d+)-(\d+)$")
+
+
+def _reply_line_of(seq: int, text: str) -> str:
+    return f"[#{seq}] {text}"
+
+
+async def _card_command(session: TreeChatSession, rest: str, say: Say) -> None:
+    """/card 子命令：show / export / all / <a>-<b> / 默认当前分支段。"""
+    conv = session.conversation
+    tokens = rest.split(maxsplit=1)
+    head = tokens[0] if tokens else ""
+    tail = tokens[1].strip() if len(tokens) > 1 else ""
+    if head == "show" and tail:
+        card = conv.cards.get(tail)
+        say(f"[{card.id}] {card.title}\n{card.body}")
+        return
+    if head == "export" and tail:
+        sub = tail.split(maxsplit=1)
+        if len(sub) < 2:
+            say("用法: /card export <id> <file>")
+            return
+        path = session.export_card(sub[0], Path(sub[1]))
+        say(f"已导出 → {path}")
+        return
+    instruction = tail or "总结为卡片"
+    if head == "all":
+        if conv.pointer is None:
+            say("（空会话）")
+            return
+        seqs = [n.seq for n in conv.path_to(conv.pointer)]
+        cid = await session.make_card(instruction, from_seqs=seqs)
+    elif (m := _RANGE_RE.match(head)):
+        seqs = list(range(int(m.group(1)), int(m.group(2)) + 1))
+        cid = await session.make_card(instruction, from_seqs=seqs)
+    else:
+        cid = await session.make_card(rest or "总结为卡片")
+    say(f"卡片已创建: [{cid}] {conv.cards.get(cid).title}（默认 pinned，/unpin 可移除）")
 
 
 async def handle_command(session: TreeChatSession, config: TreeChatConfig,
@@ -70,8 +110,42 @@ async def handle_command(session: TreeChatSession, config: TreeChatConfig,
         elif cmd == "leaf":
             state["leaf_next"] = True
             say("下一条输入 = 无上下文叶子提问")
-        elif cmd in _UNIMPLEMENTED:
-            say(f"/{cmd} 尚未实现（Task 10/11）")
+        elif cmd == "retry":
+            seq = conv.unanswered_user()
+            if seq is None:
+                say("没有待重试的节点")
+            else:
+                await session.complete(seq)
+                node = conv.nodes[conv.pointer]
+                say(_reply_line_of(node.seq, node.text))
+        elif cmd == "card":
+            await _card_command(session, rest, say)
+        elif cmd == "cards":
+            cards = conv.cards.all_cards()
+            if not cards:
+                say("（无卡片）")
+            for c in cards:
+                pin_mark = "📌" if c in conv.cards.pinned_cards() else ""
+                say(f"[{c.id}] {c.title} {pin_mark}  来源 {c.from_path}")
+        elif cmd == "pin":
+            conv.pin(rest)
+            say(f"已 pin {rest}")
+        elif cmd == "unpin":
+            conv.unpin(rest)
+            say(f"已 unpin {rest}")
+        elif cmd == "system":
+            if rest:
+                conv.update_system(rest)
+                say("system 已更新")
+            else:
+                say(f"system: {conv.system or '（空）'}")
+        elif cmd == "model":
+            if rest:
+                session.client = llm_bridge.create_client(rest)
+                say(f"模型已切换（当前会话内有效）: {rest}")
+            else:
+                cfg = getattr(session.client, "config", None)
+                say(f"当前模型: {getattr(cfg, 'model', '（未知）')}")
         else:
             say(f"未知命令: /{cmd}（/help 查看命令）")
     except LLMError as exc:

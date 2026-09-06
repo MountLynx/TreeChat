@@ -130,3 +130,65 @@ def test_repl_branch_unknown_seq_errors(tmp_path, fake_chat, fake_card_client):
     run_repl(s, TreeChatConfig(data_dir=tmp_path),
              input_fn=_make_input(["/branch 99", "/quit"]), say=say)
     assert any("错误" in line for line in out)
+
+
+def test_repl_card_flow(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    run_repl(
+        s, TreeChatConfig(data_dir=tmp_path),
+        input_fn=_make_input([
+            "讨论一下",            # 2u 3a
+            "/card 总结成卡片",     # 默认当前分支段 [2,3]
+            "/cards",
+            "/quit",
+        ]),
+        say=say,
+    )
+    conv = s.conversation
+    assert len(conv.cards.all_cards()) == 1
+    card = conv.cards.all_cards()[0]
+    assert card.instruction == "总结成卡片"
+    assert any("卡片已创建" in line for line in out)
+    assert any("📌" in line or card.id in line for line in out)
+
+
+def test_repl_card_show_and_unknown_pin(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    # 第一段：先创建卡片（id 运行时才产生，不能在输入列表里急切引用）
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input(["问", "/card 总结", "/quit"]), say=say)
+    cid = s.conversation.cards.all_cards()[0].id
+    say2, out2 = _make_say()
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input([f"/card show {cid}", "/unpin card_nope", "/quit"]),
+             say=say2)
+    assert any("卡片标题" in line for line in out2)
+    assert any("未知卡片" in line for line in out2)
+
+
+def test_repl_system_and_model_show(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    run_repl(
+        s, TreeChatConfig(data_dir=tmp_path),
+        input_fn=_make_input(["/system", "/system 新指令", "/system", "/model", "/quit"]),
+        say=say,
+    )
+    assert s.conversation.system == "新指令"
+    assert any("新指令" in line for line in out)
+    assert any("当前模型" in line for line in out)
+
+
+def test_repl_retry_command(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    fake_chat.fail = True
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input(["问题", "/quit"]), say=say)
+    fake_chat.fail = False
+    say2, out2 = _make_say()
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input(["/retry", "/quit"]), say=say2)
+    assert any("mock reply" in line for line in out2)
