@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "treechat"
+version = "0.1.0"
+description = "对话树一等公民 + 卡片式上下文产出的可嵌入对话引擎"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    # LLM 层复用：llm 客户端（chat 多轮）+ module_harness.call_harness（卡片提炼）
+    "specmodule>=0.2.0,<0.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+treechat = "treechat.cli.repl:main"
+
+[tool.setuptools.packages.find]
+include = ["treechat*"]
