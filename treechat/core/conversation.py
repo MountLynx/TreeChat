@@ -14,20 +14,22 @@ from uuid import uuid4
 from .cards import Card, CardRegistry
 from .errors import TreeChatError
 from .events import (
-    AssistantMsg, CardCreate, Pin, SessionMeta, SystemUpdate, Unpin, UserMsg,
+    AssistantMsg, CardCreate, NodeRename, Pin, SessionArchive, SessionCategory,
+    SessionMeta, SessionRename, SystemUpdate, Unpin, UserMsg,
 )
 from .store import SessionStore
 
 
 @dataclass
 class MsgNode:
-    """消息节点。id = seq（稳定可引用）。"""
+    """消息节点。id = seq（稳定可引用）。label = 用户命名（node_rename 事件派生）。"""
 
     seq: int
     parent: int | None
     role: str  # "user" | "assistant"
     text: str
     model: str = ""
+    label: str = ""
 
 
 def _now() -> str:
@@ -48,6 +50,8 @@ class Conversation:
         self.store = store
         self.name = ""
         self.system = ""
+        self.category = ""
+        self.archived = False
         self.pointer: int | None = None
         self.nodes: dict[int, MsgNode] = {}
         self.children: dict[int | None, list[int]] = {}
@@ -98,6 +102,16 @@ class Conversation:
                 self.cards.pin(ev.card_id)
             case Unpin():
                 self.cards.unpin(ev.card_id)
+            case SessionRename():
+                self.name = ev.name
+            case SessionCategory():
+                self.category = ev.category
+            case SessionArchive():
+                self.archived = ev.archived
+            case NodeRename():
+                if ev.node not in self.nodes:
+                    raise TreeChatError(f"node_rename 目标不存在: seq={ev.node}")
+                self.nodes[ev.node].label = ev.label
             case _:
                 raise TreeChatError(f"不可重放的事件: {ev!r}")
 
@@ -148,6 +162,23 @@ class Conversation:
 
     def update_system(self, text: str) -> None:
         self._append_apply(SystemUpdate(text=text))
+
+    def rename(self, name: str) -> None:
+        """会话改名（session_rename 事件；sid/文件名不变，只改显示名）。"""
+        self._append_apply(SessionRename(name=name))
+
+    def set_category(self, category: str) -> None:
+        """设置分类（空串 = 未分类）。"""
+        self._append_apply(SessionCategory(category=category))
+
+    def set_archived(self, archived: bool) -> None:
+        self._append_apply(SessionArchive(archived=archived))
+
+    def rename_node(self, seq: int, label: str) -> None:
+        """节点命名（空串 = 清除）。"""
+        if seq not in self.nodes:
+            raise TreeChatError(f"节点不存在: {seq}")
+        self._append_apply(NodeRename(node=seq, label=label))
 
     def _append_apply(self, ev: object) -> None:
         seq = self.store.append(ev)

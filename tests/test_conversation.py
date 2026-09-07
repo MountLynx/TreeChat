@@ -150,3 +150,37 @@ def test_set_pointer_unknown_node_raises(tmp_path):
     conv = _conv(tmp_path)
     with pytest.raises(TreeChatError, match="指针目标"):
         conv.set_pointer(99)
+
+
+def test_session_rename_category_archive_replay(tmp_path):
+    conv = _conv(tmp_path, name="原名")
+    conv.rename("改名")
+    conv.set_category("工作")
+    conv.set_archived(True)
+    assert (conv.name, conv.category, conv.archived) == ("改名", "工作", True)
+    # 重放同一性：重新 open 派生态一致
+    reopened = Conversation.open(tmp_path / "s.jsonl")
+    assert (reopened.name, reopened.category, reopened.archived) == ("改名", "工作", True)
+    # 反向操作也落事件
+    reopened.set_archived(False)
+    reopened.set_category("")
+    reopened2 = Conversation.open(tmp_path / "s.jsonl")
+    assert (reopened2.category, reopened2.archived) == ("", False)
+    assert reopened2.name == "改名"
+
+
+def test_rename_node_sets_label_and_replays(tmp_path):
+    conv = _conv(tmp_path)
+    u = conv.append_user("问题")
+    conv.rename_node(u, "概念澄清")
+    assert conv.nodes[u].label == "概念澄清"
+    assert Conversation.open(tmp_path / "s.jsonl").nodes[u].label == "概念澄清"
+    # 空串 = 清除命名
+    conv.rename_node(u, "")
+    assert Conversation.open(tmp_path / "s.jsonl").nodes[u].label == ""
+
+
+def test_rename_node_unknown_seq_rejected(tmp_path):
+    conv = _conv(tmp_path)
+    with pytest.raises(TreeChatError, match="不存在"):
+        conv.rename_node(99, "x")

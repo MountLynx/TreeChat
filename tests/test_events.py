@@ -3,7 +3,8 @@ import pytest
 
 from treechat.core.errors import EventFormatError
 from treechat.core.events import (
-    AssistantMsg, CardCreate, Pin, SessionMeta, SystemUpdate, Unpin, UserMsg,
+    AssistantMsg, CardCreate, NodeRename, Pin, SessionArchive, SessionCategory,
+    SessionMeta, SessionRename, SystemUpdate, Unpin, UserMsg,
     event_from_dict, event_to_dict,
 )
 
@@ -18,6 +19,10 @@ def test_roundtrip_all_types():
         CardCreate(card_id="card_ab12", title="t", body="b", from_path=[1, 2], instruction="i"),
         Pin(card_id="card_ab12"),
         Unpin(card_id="card_ab12"),
+        SessionRename(name="新名"),
+        SessionCategory(category="工作"),
+        SessionArchive(archived=True),
+        NodeRename(node=3, label="关键节点"),
     ]
     for ev in cases:
         d = event_to_dict(seq=7, event=ev)

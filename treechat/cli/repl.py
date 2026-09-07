@@ -85,8 +85,10 @@ def main(argv: list[str] | None = None, config: TreeChatConfig | None = None,
 
     if args.cmd == "list":
         from ..session import list_sessions
-        for path, meta in list_sessions(config):
-            print(f"{meta.name}\t{path.name}\t{meta.created_at}")
+        for m in list_sessions(config):
+            mark = " [归档]" if m.archived else ""
+            cat = f" ({m.category})" if m.category else ""
+            print(f"{m.name}{cat}{mark}\t{m.sid}\t{m.created_at}\t{m.node_count} 节点")
         return 0
 
     path = config.sessions_dir() / f"{args.name}.jsonl"

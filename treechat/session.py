@@ -14,9 +14,11 @@ from . import llm_bridge
 from .config import TreeChatConfig
 from .core.context import TokenWindowStrategy, WindowStrategy, assemble
 from .core.conversation import Conversation
-from .core.errors import TreeChatError
-from .core.events import SessionMeta
-from .core.store import read_session_meta
+from .core.errors import EventFormatError, TreeChatError
+from .core.events import (
+    AssistantMsg, SessionArchive, SessionCategory, SessionMeta, SessionRename,
+    UserMsg, event_from_dict,
+)
 
 
 @dataclass
@@ -121,15 +123,84 @@ def _window_or_default(window: WindowStrategy | None) -> WindowStrategy:
     return window if window is not None else TokenWindowStrategy()
 
 
-def list_sessions(config: TreeChatConfig) -> list[tuple[Path, SessionMeta]]:
+@dataclass
+class SessionSummary:
+    """会话枚举条目。sid = 文件名 stem（稳定 ID），name = 含 rename 的显示名。"""
+
+    sid: str
+    path: Path
+    name: str
+    created_at: str
+    system: str
+    category: str
+    archived: bool
+    node_count: int
+    mtime: float
+    """文件修改时间 = 最近活动时间（事件日志不带 user/assistant 时间戳）。"""
+
+
+def read_session_summary(path: Path) -> SessionSummary:
+    """全文件轻解析派生会话摘要：显示名/分类/归档/节点数。
+
+    撕裂尾（末行不完整）容忍并忽略；中间损坏/未知类型抛 EventFormatError
+    （由 list_sessions 跳过该文件——打开时才硬报错的既有纪律）。
+    """
+    name = created_at = system = category = ""
+    archived = False
+    node_count = 0
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+    total = len(lines)
+    first_meta = False
+    seen_valid = False
+    for lineno, raw in enumerate(lines, start=1):
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        try:
+            d = json.loads(stripped)
+        except json.JSONDecodeError:
+            if lineno == total and seen_valid:
+                break  # 撕裂尾：末行 JSON 不完整 → 容忍并忽略
+            raise
+        try:
+            seq, ev = event_from_dict(d)
+        except EventFormatError:
+            if lineno == total and seen_valid:
+                break  # 末行事件残缺同样容忍（打开时才硬报错）
+            raise
+        seen_valid = True
+        if not first_meta:
+            first_meta = isinstance(ev, SessionMeta)
+            if not first_meta:
+                raise EventFormatError(f"首行不是 session_meta: {path}")
+        match ev:
+            case SessionMeta():
+                name, created_at, system = ev.name, ev.created_at, ev.system
+            case SessionRename():
+                name = ev.name
+            case SessionCategory():
+                category = ev.category
+            case SessionArchive():
+                archived = ev.archived
+            case UserMsg() | AssistantMsg():
+                node_count += 1
+    return SessionSummary(
+        sid=path.stem, path=path, name=name, created_at=created_at,
+        system=system, category=category, archived=archived,
+        node_count=node_count, mtime=path.stat().st_mtime,
+    )
+
+
+def list_sessions(config: TreeChatConfig) -> list[SessionSummary]:
     """枚举 data_dir/sessions 下的会话（坏文件跳过——打开时才硬报错）。"""
     d = config.sessions_dir()
     if not d.exists():
         return []
-    out: list[tuple[Path, SessionMeta]] = []
+    out: list[SessionSummary] = []
     for p in sorted(d.glob("*.jsonl")):
         try:
-            out.append((p, read_session_meta(p)))
+            out.append(read_session_summary(p))
         except (TreeChatError, json.JSONDecodeError, OSError):
             continue
     return out

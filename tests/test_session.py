@@ -115,11 +115,33 @@ def test_list_sessions(tmp_path, fake_chat, fake_card_client, monkeypatch):
     config = TreeChatConfig(data_dir=tmp_path)
     config.sessions_dir().mkdir(parents=True)
     path = config.sessions_dir() / "甲.jsonl"
-    TreeChatSession.create(path, "甲", system="")
+    s = TreeChatSession.create(path, "甲", system="sys")
+    s.conversation.rename("甲改")
+    s.conversation.set_category("工作")
+    s.conversation.set_archived(True)
     # 坏文件（首行非 JSON）→ 枚举时跳过，打开时才硬报错
     (config.sessions_dir() / "坏.jsonl").write_text("not json", encoding="utf-8")
     listed = list_sessions(config)
-    assert [m.name for _, m in listed] == ["甲"]
+    assert [m.sid for m in listed] == ["甲"]
+    m = listed[0]
+    assert (m.name, m.system, m.category, m.archived) == ("甲改", "sys", "工作", True)
+    assert m.node_count == 0 and m.created_at  # 只有 meta，无消息节点
+    assert m.path == path
+
+
+def test_list_sessions_counts_nodes_and_tolerates_torn_tail(
+        tmp_path, fake_chat, fake_card_client, monkeypatch):
+    from treechat import llm_bridge
+    monkeypatch.setattr(llm_bridge, "create_client", lambda model=None: fake_chat)
+    config = TreeChatConfig(data_dir=tmp_path)
+    s = TreeChatSession.create(config.sessions_dir() / "t.jsonl", "t")
+    asyncio.run(s.turn("问题一"))
+    # 撕裂尾：末行不完整 → 容忍并忽略该行
+    p = config.sessions_dir() / "t.jsonl"
+    with open(p, "a", encoding="utf-8") as f:
+        f.write('{"seq":4,"type":"user_msg","parent":3,"text":"被截断的')
+    listed = list_sessions(config)
+    assert len(listed) == 1 and listed[0].node_count == 2
 
 
 def test_make_card_rejects_unknown_seqs(tmp_path, fake_chat, fake_card_client):
