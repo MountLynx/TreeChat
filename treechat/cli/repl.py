@@ -80,8 +80,15 @@ def main(argv: list[str] | None = None, config: TreeChatConfig | None = None,
     p_open = sub.add_parser("open", help="打开会话进入 REPL")
     p_open.add_argument("name")
     sub.add_parser("list", help="列出会话")
+    p_web = sub.add_parser("webui", help="启动 WebUI 服务（需 webui 依赖组）")
+    p_web.add_argument("--host", default="127.0.0.1")
+    p_web.add_argument("--port", type=int, default=8700)
     args = parser.parse_args(argv)
     config = config or TreeChatConfig()
+
+    if args.cmd == "webui":
+        from ..webapp.app import run_server  # 懒 import：无 fastapi 不影响 CLI 其余命令
+        return run_server(config, host=args.host, port=args.port)
 
     if args.cmd == "list":
         from ..session import list_sessions

@@ -15,7 +15,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]
+webui = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]
 treechat = "treechat.cli.repl:main"

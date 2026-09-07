@@ -47,6 +47,9 @@ class CardRegistry:
     def pinned_cards(self) -> list[Card]:
         return [c for cid, c in self._cards.items() if cid in self._pinned]
 
+    def is_pinned(self, card_id: str) -> bool:
+        return card_id in self._pinned
+
     def all_cards(self) -> list[Card]:
         return list(self._cards.values())
 
