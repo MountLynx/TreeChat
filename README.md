@@ -24,6 +24,15 @@ REPL 内：裸输入对话；`/branch <seq>` 在任意历史节点开分支；`/
 （`*` 指针、`◆` 主干末端、`[card_x]` 卡片来源）；`/trunk` 回主干末端；`/retry`
 重试失败轮次。谁最长谁是主干——树上没有存储的主干，只有最长路径这条视图规则。
 
+## WebUI
+
+    pip install -e ".[webui]"
+    treechat webui                # http://127.0.0.1:8700（首次需 cd webui && npm run build）
+
+VSCode 式布局：活动栏（对话 / 对话树 / 卡片 / 设置占位）+ 侧边栏 + 主聊天区。
+对话管理（创建/重命名/分类/归档/删除）、git 图式对话树（分支/叶子/节点命名/
+从此分支）、卡片生成与 pin。详见 [webui/README.md](webui/README.md)。
+
 ## 编程 API
 
     from treechat import TreeChatSession
