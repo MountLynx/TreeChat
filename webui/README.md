@@ -9,7 +9,7 @@ VSCode 式布局的 Web 界面：最左活动栏（图标 = 页签）+ 侧边栏
 |---|---|---|
 | 💬 | 对话 | 历史对话列表 + 管理（创建 / 重命名 / 分类 / 归档 / 删除） |
 | 🌿 | 对话树 | 当前对话的分支图（git 图式：节点 + 连线 + lane；叶子在对应节点旁；点节点 → 命名 / 从此分支） |
-| 🗂 | 卡片 | 当前对话的卡片管理（生成 / pin / 查看；未完善功能见页签内 Roadmap 与 [ROADMAP.md](./ROADMAP.md)） |
+| 🗂 | 卡片 | 当前对话的卡片管理（生成 / pin / 查看 / **编辑 / 删除 / 导出 / 导入 / 跨会话卡库**；树图选点自定义提炼范围；剩余见 [ROADMAP.md](./ROADMAP.md)） |
 | ⚙ | 设置（底部） | 占位，无实际功能 |
 
 ## 运行
@@ -47,3 +47,6 @@ treechat/webapp/       FastAPI 服务层
 - LLM 失败返回 502 `{error, state}`：user 节点已落盘（悬而未答），前端展示错误条 + 重试。
 - 引擎侧新增 4 种事件支撑对话管理：`session_rename` / `session_category` /
   `session_archive` / `node_rename`（见 `docs/specs/2026-09-07-webui-design.md`）。
+- 卡片功能补全（2026-09-09）：引擎再增 `card_edit` / `card_delete` 事件；
+  Web 层补卡片编辑/删除/导出/导入与跨会话卡库（复制导入语义）端点
+  （见 `docs/specs/2026-09-09-cards-completion-design.md`）。

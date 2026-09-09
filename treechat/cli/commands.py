@@ -26,7 +26,8 @@ _HELP = """\
   /leaf                 下一条输入 = 无上下文叶子提问
   /retry                对最后一个悬而未答节点重新调 LLM
   /card [all|<a>-<b>|指令]   提炼卡片（默认当前分支段）
-  /cards；/card show <id>；/pin /unpin <id>；/card export <id> <file>
+  /cards；/card show <id>；/card edit <id> [新标题]；/card delete <id>
+  /pin /unpin <id>；/card export <id> <file>
   /where                当前位置
   /system [新指令]       查看/修改会话级 system
   /model [名]           查看/切换模型
@@ -41,7 +42,7 @@ def _reply_line_of(seq: int, text: str) -> str:
 
 
 async def _card_command(session: TreeChatSession, rest: str, say: Say) -> None:
-    """/card 子命令：show / export / all / <a>-<b> / 默认当前分支段。"""
+    """/card 子命令：show / edit / delete / export / all / <a>-<b> / 默认当前分支段。"""
     conv = session.conversation
     tokens = rest.split(maxsplit=1)
     head = tokens[0] if tokens else ""
@@ -49,6 +50,22 @@ async def _card_command(session: TreeChatSession, rest: str, say: Say) -> None:
     if head == "show" and tail:
         card = conv.cards.get(tail)
         say(f"[{card.id}] {card.title}\n{card.body}")
+        return
+    if head == "edit" and tail:
+        sub = tail.split(maxsplit=1)
+        cid = sub[0]
+        if len(sub) < 2:
+            card = conv.cards.get(cid)  # 省略新标题 = 查看（正文多行编辑在 WebUI）
+            say(f"[{card.id}] {card.title}\n{card.body}\n（改标题: /card edit {cid} <新标题>）")
+            return
+        card = conv.cards.get(cid)
+        conv.edit_card(cid, sub[1], card.body)
+        say(f"卡片已改名: [{cid}] {sub[1]}")
+        return
+    if head == "delete" and tail:
+        card = conv.cards.get(tail)
+        conv.delete_card(tail)
+        say(f"卡片已删除: [{tail}] {card.title}")
         return
     if head == "export" and tail:
         sub = tail.split(maxsplit=1)

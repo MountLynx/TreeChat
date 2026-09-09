@@ -20,6 +20,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSeq, setSelectedSeq] = useState<number | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
+  const [cardSeqs, setCardSeqs] = useState<number[]>([]);
+  const [cardGenOpen, setCardGenOpen] = useState(false);
 
   const refreshSessions = useCallback(() => {
     api.listSessions().then(setSessions).catch(() => setSessions([]));
@@ -40,6 +42,8 @@ export default function App() {
       setBranchParent(null);
       setLeafMode(false);
       setSelectedSeq(null);
+      setCardSeqs([]);
+      setCardGenOpen(false);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -132,6 +136,26 @@ export default function App() {
     setConv(await api.pinCard(activeSid, cid, pinned));
   };
 
+  const editCard = async (cid: string, body: { title: string; body: string }) => {
+    if (!activeSid) return;
+    setConv(await api.editCard(activeSid, cid, body));
+  };
+
+  const deleteCard = async (cid: string) => {
+    if (!activeSid) return;
+    setConv(await api.deleteCard(activeSid, cid));
+  };
+
+  const importCard = async (body: { title: string; body: string; instruction?: string }) => {
+    if (!activeSid) return;
+    setConv(await api.importCard(activeSid, body));
+  };
+
+  const toggleCardSeq = (seq: number) => {
+    setCardSeqs((prev) =>
+      prev.includes(seq) ? prev.filter((s) => s !== seq) : [...prev, seq]);
+  };
+
   const showSettings = tab === "settings";
 
   return (
@@ -163,10 +187,27 @@ export default function App() {
               setConv(await api.renameNode(activeSid, seq, label));
             }}
             onBranchFrom={branchFrom}
+            cardSeqs={cardSeqs}
+            onToggleCardSeq={toggleCardSeq}
+            onGenerateCard={() => {
+              setTab("cards");
+              setCardGenOpen(true);
+            }}
           />
         )}
         {tab === "cards" && (
-          <CardsTab conv={conv} onCreateCard={createCard} onPin={pinCard} />
+          <CardsTab
+            conv={conv}
+            genOpen={cardGenOpen}
+            onGenOpenChange={setCardGenOpen}
+            cardSeqs={cardSeqs}
+            onClearCardSeqs={() => setCardSeqs([])}
+            onCreateCard={createCard}
+            onPin={pinCard}
+            onEditCard={editCard}
+            onDeleteCard={deleteCard}
+            onImportCard={importCard}
+          />
         )}
         {showSettings && <SettingsTab health={health} />}
       </aside>

@@ -40,6 +40,17 @@ class CardRegistry:
         self._require(card_id)
         self._pinned.discard(card_id)
 
+    def update(self, card_id: str, title: str, body: str) -> None:
+        """整体替换标题与正文（card_edit 重放语义）。"""
+        card = self.get(card_id)
+        card.title, card.body = title, body
+
+    def remove(self, card_id: str) -> Card:
+        """删除卡片并移除 pin 状态（card_delete 重放语义）。返回被删卡片。"""
+        card = self._require(card_id)
+        self._pinned.discard(card_id)
+        return self._cards.pop(card_id)
+
     def get(self, card_id: str) -> Card:
         self._require(card_id)
         return self._cards[card_id]
@@ -56,6 +67,7 @@ class CardRegistry:
     def ids(self) -> set[str]:
         return set(self._cards)
 
-    def _require(self, card_id: str) -> None:
+    def _require(self, card_id: str) -> Card:
         if card_id not in self._cards:
             raise TreeChatError(f"未知卡片: {card_id}")
+        return self._cards[card_id]

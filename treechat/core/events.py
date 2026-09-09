@@ -1,4 +1,4 @@
-"""事件模型 —— 11 种事件 + 严格序列化。
+"""事件模型 —— 13 种事件 + 严格序列化。
 
 type 字符串（snake_case）与 dataclass 一一对应；from_dict 严格校验
 字段集（缺字段/多余字段/未知类型一律 EventFormatError），不做隐式补全。
@@ -59,6 +59,20 @@ class Unpin:
 
 
 @dataclass
+class CardEdit:
+    card_id: str
+    title: str
+    body: str
+    """整体替换标题与正文（卡片功能补全 spec §1；不做部分更新，重放确定性最简单）。"""
+
+
+@dataclass
+class CardDelete:
+    card_id: str
+    """删除卡片并移除 pin 状态；不做墓碑（事件日志本身保留历史）。"""
+
+
+@dataclass
 class SessionRename:
     name: str
 
@@ -89,6 +103,8 @@ _EVENT_TYPES: dict[str, type] = {
     "card_create": CardCreate,
     "pin": Pin,
     "unpin": Unpin,
+    "card_edit": CardEdit,
+    "card_delete": CardDelete,
     "session_rename": SessionRename,
     "session_category": SessionCategory,
     "session_archive": SessionArchive,

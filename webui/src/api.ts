@@ -1,4 +1,4 @@
-import type { ConvState, Health, SessionSummary } from "./types";
+import type { ConvState, Health, LibraryCard, SessionSummary } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -82,11 +82,23 @@ export const retry = (sid: string) =>
 
 export interface CardReq {
   instruction: string;
-  mode: "branch" | "all" | "range";
+  mode: "branch" | "all" | "range" | "seqs";
   start?: number;
   end?: number;
+  seqs?: number[];
 }
 export const createCard = (sid: string, body: CardReq) =>
   req<ConvState>(`/api/sessions/${encodeURIComponent(sid)}/cards`, json("POST", body));
 export const pinCard = (sid: string, cid: string, pinned: boolean) =>
   req<ConvState>(`/api/sessions/${encodeURIComponent(sid)}/cards/${cid}/pin`, json("POST", { pinned }));
+export const editCard = (sid: string, cid: string, body: { title: string; body: string }) =>
+  req<ConvState>(`/api/sessions/${encodeURIComponent(sid)}/cards/${encodeURIComponent(cid)}`, json("PATCH", body));
+export const deleteCard = (sid: string, cid: string) =>
+  req<ConvState>(`/api/sessions/${encodeURIComponent(sid)}/cards/${encodeURIComponent(cid)}`, { method: "DELETE" });
+export const importCard = (sid: string, body: { title: string; body: string; instruction?: string }) =>
+  req<ConvState>(`/api/sessions/${encodeURIComponent(sid)}/cards/import`, json("POST", body));
+/** 跨会话卡库（复制导入语义：导入 = 在当前会话建独立副本） */
+export const listLibraryCards = () => req<LibraryCard[]>("/api/cards");
+/** 导出端点（Content-Disposition 附件下载，直接给 <a href> 用） */
+export const cardExportUrl = (sid: string, cid: string) =>
+  `/api/sessions/${encodeURIComponent(sid)}/cards/${encodeURIComponent(cid)}/export`;

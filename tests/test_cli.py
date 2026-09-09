@@ -168,6 +168,34 @@ def test_repl_card_show_and_unknown_pin(tmp_path, fake_chat, fake_card_client):
     assert any("未知卡片" in line for line in out2)
 
 
+def test_repl_card_edit_and_delete(tmp_path, fake_chat, fake_card_client):
+    s = _open_session(tmp_path, fake_chat, fake_card_client)
+    say, out = _make_say()
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input(["问", "/card 总结", "/quit"]), say=say)
+    cid = s.conversation.cards.all_cards()[0].id
+    say2, out2 = _make_say()
+    run_repl(s, TreeChatConfig(data_dir=tmp_path),
+             input_fn=_make_input([
+                 f"/card edit {cid} 新标题",
+                 f"/card show {cid}",
+                 f"/card edit {cid}",       # 省略新标题 = 查看
+                 f"/card delete {cid}",
+                 f"/card delete {cid}",     # 已删除 → 显式报错
+                 "/quit",
+             ]),
+             say=say2)
+    card = s.conversation.cards.get(cid) if cid in s.conversation.cards.ids() else None
+    assert card is None  # 已删除
+    assert any("卡片已改名" in line for line in out2)
+    assert any("新标题" in line for line in out2)
+    assert sum("卡片已删除" in line for line in out2) == 1
+    assert any("未知卡片" in line for line in out2)
+    # 删除已落盘：重放后仍无卡片
+    from treechat.core.conversation import Conversation
+    assert Conversation.open(tmp_path / "t.jsonl").cards.all_cards() == []
+
+
 def test_repl_system_and_model_show(tmp_path, fake_chat, fake_card_client):
     s = _open_session(tmp_path, fake_chat, fake_card_client)
     say, out = _make_say()

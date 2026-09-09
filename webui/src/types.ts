@@ -50,6 +50,12 @@ export interface Health {
   dataDir: string;
 }
 
+/** 跨会话卡库条目（GET /api/cards；复制导入语义） */
+export type LibraryCard = Card & {
+  sid: string;
+  sessionName: string;
+};
+
 /** 侧边栏页签 */
 export type Tab = "chat" | "tree" | "cards" | "settings";
 

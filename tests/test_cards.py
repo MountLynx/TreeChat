@@ -38,3 +38,30 @@ def test_duplicate_id_raises():
     reg.add(_card())
     with pytest.raises(TreeChatError, match="重复"):
         reg.add(_card())
+
+
+def test_update_replaces_title_and_body():
+    reg = CardRegistry()
+    reg.add(_card())
+    reg.update("card_0001", "新标题", "新正文")
+    card = reg.get("card_0001")
+    assert card.title == "新标题" and card.body == "新正文"
+    assert card.from_path == [1]  # 其余字段不动
+
+
+def test_remove_deletes_and_unpins():
+    reg = CardRegistry()
+    reg.add(_card())  # 默认 pinned
+    removed = reg.remove("card_0001")
+    assert removed.id == "card_0001"
+    assert reg.all_cards() == [] and reg.pinned_cards() == []
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        reg.get("card_0001")
+
+
+def test_update_and_remove_unknown_raise():
+    reg = CardRegistry()
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        reg.update("card_nope", "t", "b")
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        reg.remove("card_nope")

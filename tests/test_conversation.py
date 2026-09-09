@@ -184,3 +184,43 @@ def test_rename_node_unknown_seq_rejected(tmp_path):
     conv = _conv(tmp_path)
     with pytest.raises(TreeChatError, match="不存在"):
         conv.rename_node(99, "x")
+
+
+def test_edit_and_delete_card_replay(tmp_path):
+    conv = _conv(tmp_path)
+    cid = conv.add_card("原标题", "原正文", from_path=[1])
+    conv.edit_card(cid, "新标题", "新正文")
+    card = conv.cards.get(cid)
+    assert (card.title, card.body) == ("新标题", "新正文")
+    assert card.from_path == [1]  # 其余字段不动
+    # 重放同一性
+    reopened = Conversation.open(tmp_path / "s.jsonl")
+    assert reopened.cards.get(cid) == card
+    # 删除（默认 pinned 一并清除）+ 重放一致
+    assert conv.cards.is_pinned(cid)
+    conv.delete_card(cid)
+    assert conv.cards.all_cards() == []
+    assert Conversation.open(tmp_path / "s.jsonl").cards.all_cards() == []
+    # 删除后可新建同 id 概念上不冲突（id 随机）；对未知卡片操作抛错
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        conv.edit_card(cid, "t", "b")
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        conv.delete_card(cid)
+
+
+def test_failed_card_ops_leave_no_poison_events(tmp_path):
+    """对未知卡片 edit/delete/pin 失败 → 不落事件（否则文件重放必失败被锁死）。"""
+    conv = _conv(tmp_path)
+    cid = conv.add_card("t", "b", from_path=[1])
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        conv.pin("card_nope")
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        conv.unpin("card_nope")
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        conv.edit_card("card_nope", "t", "b")
+    with pytest.raises(TreeChatError, match="未知卡片"):
+        conv.delete_card("card_nope")
+    # 文件完好：重放得到与内存一致的视图
+    reopened = Conversation.open(tmp_path / "s.jsonl")
+    assert [c.id for c in reopened.cards.all_cards()] == [cid]
+    assert reopened.cards.is_pinned(cid)

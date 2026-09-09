@@ -14,8 +14,9 @@ from uuid import uuid4
 from .cards import Card, CardRegistry
 from .errors import TreeChatError
 from .events import (
-    AssistantMsg, CardCreate, NodeRename, Pin, SessionArchive, SessionCategory,
-    SessionMeta, SessionRename, SystemUpdate, Unpin, UserMsg,
+    AssistantMsg, CardCreate, CardDelete, CardEdit, NodeRename, Pin,
+    SessionArchive, SessionCategory, SessionMeta, SessionRename, SystemUpdate,
+    Unpin, UserMsg,
 )
 from .store import SessionStore
 
@@ -102,6 +103,10 @@ class Conversation:
                 self.cards.pin(ev.card_id)
             case Unpin():
                 self.cards.unpin(ev.card_id)
+            case CardEdit():
+                self.cards.update(ev.card_id, ev.title, ev.body)
+            case CardDelete():
+                self.cards.remove(ev.card_id)
             case SessionRename():
                 self.name = ev.name
             case SessionCategory():
@@ -155,10 +160,22 @@ class Conversation:
         return ev.card_id
 
     def pin(self, card_id: str) -> None:
+        self.cards.get(card_id)  # 先验证再落盘：失败不落事件（否则重放必失败的毒事件会锁死文件）
         self._append_apply(Pin(card_id=card_id))
 
     def unpin(self, card_id: str) -> None:
+        self.cards.get(card_id)
         self._append_apply(Unpin(card_id=card_id))
+
+    def edit_card(self, card_id: str, title: str, body: str) -> None:
+        """整体替换卡片标题与正文（未知卡片抛错，不落事件）。"""
+        self.cards.get(card_id)
+        self._append_apply(CardEdit(card_id=card_id, title=title, body=body))
+
+    def delete_card(self, card_id: str) -> None:
+        """删除卡片（含 pin 状态；未知卡片抛错，不落事件）。"""
+        self.cards.get(card_id)
+        self._append_apply(CardDelete(card_id=card_id))
 
     def update_system(self, text: str) -> None:
         self._append_apply(SystemUpdate(text=text))

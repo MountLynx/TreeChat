@@ -114,7 +114,7 @@ class TreeChatSession:
     def export_card(self, card_id: str, file_path: Path) -> Path:
         card = self.conversation.cards.get(card_id)
         out = Path(file_path)
-        out.write_text(f"# {card.title}\n\n{card.body}\n", encoding="utf-8")
+        out.write_text(card_markdown(card), encoding="utf-8")
         return out
 
 
@@ -203,4 +203,39 @@ def list_sessions(config: TreeChatConfig) -> list[SessionSummary]:
             out.append(read_session_summary(p))
         except (TreeChatError, json.JSONDecodeError, OSError):
             continue
+    return out
+
+
+@dataclass
+class LibraryCard:
+    """跨会话卡库条目（只读枚举）。「引用」= 复制导入，不建立跨文件引用。"""
+
+    sid: str
+    session_name: str
+    card: Card
+    pinned: bool
+
+
+def card_markdown(card: Card) -> str:
+    """卡片导出格式（CLI 与 Web 导出共用）：`# 标题\\n\\n正文\\n`。"""
+    return f"# {card.title}\n\n{card.body}\n"
+
+
+def list_library_cards(config: TreeChatConfig) -> list[LibraryCard]:
+    """全库枚举：所有会话的全部卡片（重放派生，坏文件跳过——与 list_sessions 同纪律）。
+
+    只读扫描：不建 LLM 客户端、不进会话注册表。
+    """
+    d = config.sessions_dir()
+    if not d.exists():
+        return []
+    out: list[LibraryCard] = []
+    for p in sorted(d.glob("*.jsonl")):
+        try:
+            conv = Conversation.open(p)
+        except (TreeChatError, json.JSONDecodeError, OSError):
+            continue
+        for c in conv.cards.all_cards():
+            out.append(LibraryCard(sid=p.stem, session_name=conv.name, card=c,
+                                   pinned=conv.cards.is_pinned(c.id)))
     return out

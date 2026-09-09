@@ -9,7 +9,9 @@ import pytest
 
 from treechat.config import TreeChatConfig
 from treechat.core.events import UserMsg
-from treechat.session import TreeChatSession, list_sessions
+from treechat.session import (
+    TreeChatSession, card_markdown, list_library_cards, list_sessions,
+)
 
 
 def _session(tmp_path, fake_chat, fake_card_client, name="t"):
@@ -149,3 +151,24 @@ def test_make_card_rejects_unknown_seqs(tmp_path, fake_chat, fake_card_client):
     asyncio.run(s.turn("问"))
     with pytest.raises(TreeChatError, match="不存在的节点"):
         asyncio.run(s.make_card("总结", from_seqs=[2, 99]))
+
+
+def test_list_library_cards_across_sessions(tmp_path, fake_chat, fake_card_client, monkeypatch):
+    from treechat import llm_bridge
+    monkeypatch.setattr(llm_bridge, "create_client", lambda model=None: fake_chat)
+    config = TreeChatConfig(data_dir=tmp_path)
+    s1 = TreeChatSession.create(config.sessions_dir() / "会话一.jsonl", "会话一")
+    s2 = TreeChatSession.create(config.sessions_dir() / "会话二.jsonl", "会话二")
+    s1.card_llm = fake_card_client  # 提炼走假卡片客户端（与 _session 助手一致）
+    asyncio.run(s1.turn("问"))
+    c1 = asyncio.run(s1.make_card("总结"))
+    s1.conversation.unpin(c1)
+    c2 = s2.conversation.add_card("手写卡", "手写正文", from_path=[])
+    # 坏文件 → 跳过（与 list_sessions 同纪律）
+    (config.sessions_dir() / "坏.jsonl").write_text('{"seq":1,"type":"magic"}', encoding="utf-8")
+    lib = list_library_cards(config)
+    assert [(e.sid, e.card.id) for e in lib] == [("会话一", c1), ("会话二", c2)]
+    by_sid = {e.sid: e for e in lib}
+    assert by_sid["会话一"].session_name == "会话一" and by_sid["会话一"].pinned is False
+    assert by_sid["会话二"].pinned is True
+    assert card_markdown(by_sid["会话二"].card) == "# 手写卡\n\n手写正文\n"

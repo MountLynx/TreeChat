@@ -1,4 +1,4 @@
-import { GitFork, Pencil } from "lucide-react";
+import { GitFork, Layers, Pencil, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Card, ConvState, Node } from "../../types";
 import { LANE_W, layoutTree, X0, DOT_R, ROW_H } from "../../lib/treelayout";
@@ -13,6 +13,9 @@ interface Props {
   onSelect: (seq: number | null) => void;
   onRenameNode: (seq: number, label: string) => Promise<void>;
   onBranchFrom: (seq: number) => void;
+  cardSeqs: number[];
+  onToggleCardSeq: (seq: number) => void;
+  onGenerateCard: () => void;
 }
 
 /** Tree 页签：对话树分支图（节点 + 线条，git 图式；叶子放对应节点旁） */
@@ -147,6 +150,24 @@ export function TreeTab(p: Props) {
         )}
       </div>
 
+      {/* 卡片提炼范围条（树图选点 → 自定义范围生成卡片） */}
+      {p.cardSeqs.length > 0 && (
+        <div className="mx-2 mb-2 flex items-center gap-1.5 rounded-panel border border-primary/40 bg-primary/[0.06] px-2.5 py-1.5 text-[11.5px]">
+          <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="shrink-0 text-muted-foreground">卡片范围</span>
+          <div className="min-w-0 flex-1 truncate font-mono text-[10.5px]">
+            {p.cardSeqs.map((s) => `#${s}`).join(" ")}
+          </div>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5" title="清除范围"
+                  onClick={() => p.cardSeqs.forEach((s) => p.onToggleCardSeq(s))}>
+            <X className="h-3 w-3" />
+          </Button>
+          <Button size="sm" className="h-6 px-2 text-[11.5px]" onClick={p.onGenerateCard}>
+            <Plus className="h-3 w-3" /> 生成卡片
+          </Button>
+        </div>
+      )}
+
       {/* 选中节点详情 */}
       {selected && (
         <div className="mx-2 mb-2 rounded-panel border bg-card p-2.5">
@@ -161,6 +182,12 @@ export function TreeTab(p: Props) {
             <div className="ml-auto flex gap-1">
               <Button variant="ghost" size="sm" onClick={() => setRenameTarget(selected)}>
                 <Pencil className="h-3 w-3" /> 命名
+              </Button>
+              <Button variant="ghost" size="sm"
+                      className={cn(p.cardSeqs.includes(selected.seq) && "text-primary")}
+                      onClick={() => p.onToggleCardSeq(selected.seq)}>
+                <Layers className="h-3 w-3" />
+                {p.cardSeqs.includes(selected.seq) ? "移出卡片范围" : "选入卡片范围"}
               </Button>
               <Button variant="outline" size="sm" onClick={() => p.onBranchFrom(selected.seq)}>
                 <GitFork className="h-3 w-3" /> 从此分支

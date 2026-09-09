@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from ..config import TreeChatConfig
 from ..core.errors import TreeChatError
 from ..llm_bridge import LLMError
-from ..session import list_sessions
+from ..session import card_markdown, list_library_cards, list_sessions
 from .registry import LLMErrorUnconfigured, SessionRegistry, session_path
 
 
@@ -54,13 +54,26 @@ class TurnBody(BaseModel):
 
 class CardBody(BaseModel):
     instruction: str = "总结为卡片"
-    mode: Literal["branch", "all", "range"] = "branch"
+    mode: Literal["branch", "all", "range", "seqs"] = "branch"
     start: int | None = None
     end: int | None = None
+    seqs: list[int] = []
+    """seqs 模式的显式节点列表（树图选点提炼；空列表 → 400）。"""
 
 
 class PinBody(BaseModel):
     pinned: bool
+
+
+class CardEditBody(BaseModel):
+    title: str
+    body: str
+
+
+class CardImportBody(BaseModel):
+    title: str
+    body: str
+    instruction: str = ""
 
 
 # ── 序列化 ──
@@ -255,10 +268,72 @@ def create_app(config: TreeChatConfig | None = None, *,
                 if body.start is None or body.end is None or body.start > body.end:
                     raise TreeChatError("区间模式需要 start ≤ end")
                 seqs = list(range(body.start, body.end + 1))
+            elif body.mode == "seqs":
+                if not body.seqs:
+                    raise TreeChatError("seqs 模式需要非空节点列表")
+                seqs = body.seqs
             else:
                 seqs = None  # 默认当前分支段
             await s.make_card(body.instruction, from_seqs=seqs)
         return await _run(sid, work)
+
+    @app.post("/api/sessions/{sid}/cards/import")
+    async def cards_import(sid: str, body: CardImportBody) -> dict[str, Any]:
+        """导入卡片 = 直接落 card_create（不经 LLM；跨会话卡库的复制导入语义）。"""
+        async with registry.lock(sid):
+            s = _open(sid)
+            try:
+                s.conversation.add_card(body.title, body.body,
+                                        from_path=[], instruction=body.instruction)
+            except TreeChatError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            return _state(sid, s)
+
+    @app.patch("/api/sessions/{sid}/cards/{cid}")
+    async def card_edit(sid: str, cid: str, body: CardEditBody) -> dict[str, Any]:
+        async with registry.lock(sid):
+            s = _open(sid)
+            try:
+                s.conversation.edit_card(cid, body.title, body.body)
+            except TreeChatError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            return _state(sid, s)
+
+    @app.delete("/api/sessions/{sid}/cards/{cid}")
+    async def card_delete(sid: str, cid: str) -> dict[str, Any]:
+        async with registry.lock(sid):
+            s = _open(sid)
+            try:
+                s.conversation.delete_card(cid)
+            except TreeChatError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            return _state(sid, s)
+
+    @app.get("/api/sessions/{sid}/cards/{cid}/export")
+    async def card_export(sid: str, cid: str):
+        s = _open(sid)
+        try:
+            card = s.conversation.cards.get(cid)
+        except TreeChatError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return Response(
+            content=card_markdown(card), media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{cid}.md"'},
+        )
+
+    @app.get("/api/cards")
+    def cards_library() -> list[dict[str, Any]]:
+        """跨会话卡库（只读枚举；复制导入语义，不建立跨文件引用）。"""
+        out = []
+        for e in list_library_cards(config):
+            c = e.card
+            out.append({
+                "sid": e.sid, "sessionName": e.session_name,
+                "id": c.id, "title": c.title, "body": c.body,
+                "fromPath": list(c.from_path), "instruction": c.instruction,
+                "createdAt": c.created_at, "pinned": e.pinned,
+            })
+        return out
 
     @app.post("/api/sessions/{sid}/cards/{cid}/pin")
     async def card_pin(sid: str, cid: str, body: PinBody) -> dict[str, Any]:
